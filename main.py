@@ -137,7 +137,7 @@ async def connect_rtc_session(
                     "error": sdp_response.text
                 }
             )
-
+        
         return Response(
             status_code=status.HTTP_200_OK,
             content=sdp_response.content,
