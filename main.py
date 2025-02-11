@@ -4,13 +4,15 @@ import os
 import requests
 
 # Third party imports
-from fastapi import FastAPI, status, Response, Request
+from dotenv import load_dotenv
+from fastapi import FastAPI, status, Response, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-from prompts import DEFAULT_PROMPT
+from pydantic import BaseModel
 
 # local imports
+from domain_service import UserDataService
+from prompts import DEFAULT_PROMPT
 from logging_config import setup_logging
 
 load_dotenv()
@@ -43,6 +45,17 @@ openai_base_url = os.getenv("OPENAI_BASE_URL")
 openai_session_url = os.getenv("OPENAI_SESSION_URL")
 openai_realtime_voice = os.getenv("OPENAI_REALTIME_VOICE")
 openai_realtime_model = os.getenv("OPENAI_REALTIME_MODEL")
+
+# Debug Setup
+DEBUG = bool(int(os.getenv("DEBUG", 0)))
+
+
+# User conversion Schema
+class UserConversation(BaseModel):
+    identity: str
+    initial_diagnostics: str
+    emotion: str
+    diagnostic_suggestion: str
 
 
 @app.post("/", include_in_schema=False)
@@ -137,7 +150,7 @@ async def connect_rtc_session(
                     "error": sdp_response.text
                 }
             )
-        
+
         return Response(
             status_code=status.HTTP_200_OK,
             content=sdp_response.content,
@@ -147,3 +160,37 @@ async def connect_rtc_session(
     except Exception as e:
         logger.info("Error connecting to Realtime AI session %s", e)
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"error": "Error connecting to Realtime AI session"})
+
+
+@app.post("/conversation")
+async def save_user_conversion(
+    user_data: UserConversation,
+    user_data_service: UserDataService = Depends(UserDataService)
+):
+    """
+    Save user conversation.
+
+    Returns:
+        str: "OK"
+    """
+    try:
+        user_data_dict = user_data.model_dump()
+        user_data = user_data_service.insert_user_data(
+            user_data=user_data_dict)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "success": True,
+                "message": "User conversation saved successfully",
+                "data": user_data
+            })
+    except Exception as e:
+        logger.error("Error saving user conversation %s", e)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "message": "Error saving user conversation",
+                "error": str(e) if DEBUG else "Unable to save user conversation. Please try again later."
+            }
+        )

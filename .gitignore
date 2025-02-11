@@ -176,3 +176,6 @@ logs/
 
 # vscode files
 .vscode/
+
+# alembic files
+versions
